@@ -1,6 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { signOut } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase';
 import {
   collection,
@@ -10,205 +8,232 @@ import {
   addDoc,
   doc,
   updateDoc,
-  onSnapshot,
+  deleteDoc,
+  serverTimestamp,
 } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { useNavigate } from 'react-router-dom';
+import { CSVLink } from 'react-csv';
 
 function HospitalDashboard() {
   const [requests, setRequests] = useState([]);
-  const [newRequest, setNewRequest] = useState({
-    bloodType: '',
-    units: '',
-    urgency: 'Normal',
-    hospitalName: '',
-    status: 'Pending',
-  });
-  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [hospitalName, setHospitalName] = useState('');
+  const [hospitalLocation, setHospitalLocation] = useState('');
+  const [editingRequestId, setEditingRequestId] = useState(null);
+  const [editedRequest, setEditedRequest] = useState({});
+  const [filters, setFilters] = useState({ urgency: '', status: '' });
+  const [newRequest, setNewRequest] = useState({ bloodType: '', units: '', urgency: 'Normal' });
 
-  const currentUser = auth.currentUser;
   const navigate = useNavigate();
 
-  // Logout handler
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      navigate('/');
-    } catch (error) {
-      console.error('Logout error:', error);
-      alert('Logout failed.');
-    }
-  };
-
-  // Fetch hospital's requests and listen for updates
   useEffect(() => {
-    if (!currentUser) return;
-
-    const q = query(
-      collection(db, 'requests'),
-      where('hospitalId', '==', currentUser.uid)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setRequests(data);
-      setLoading(false);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setCurrentUser(user);
+        const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', user.uid)));
+        const userData = userDoc.docs[0]?.data();
+        setHospitalName(userData?.name || '');
+        setHospitalLocation(userData?.location || '');
+        fetchRequests(user.uid);
+      } else {
+        navigate('/');
+      }
     });
 
     return () => unsubscribe();
-  }, [currentUser]);
+  }, [navigate]);
 
-  // Create new blood request
-  const handleCreateRequest = async (e) => {
-    e.preventDefault();
+  const fetchRequests = async (uid) => {
+    const snapshot = await getDocs(query(collection(db, 'requests'), where('hospitalId', '==', uid)));
+    const list = await Promise.all(snapshot.docs.map(async docSnap => {
+      const data = docSnap.data();
+      const responsesSnapshot = await getDocs(collection(db, 'requests', docSnap.id, 'responses'));
+      const donors = responsesSnapshot.docs.map(r => r.data());
+      return { id: docSnap.id, ...data, donors };
+    }));
+    setRequests(list);
+  };
 
-    if (!newRequest.bloodType || !newRequest.units || !newRequest.hospitalName) {
-      alert('Please fill in all required fields.');
+  const handleDelete = async (id) => {
+    const confirmDelete = window.confirm('Are you sure you want to delete this request?');
+    if (!confirmDelete) return;
+    await deleteDoc(doc(db, 'requests', id));
+    fetchRequests(currentUser.uid);
+  };
+
+  const handleEdit = (request) => {
+    setEditingRequestId(request.id);
+    setEditedRequest({ ...request });
+  };
+
+  const handleSave = async () => {
+    const confirmSave = window.confirm('Save changes to this request?');
+    if (!confirmSave) return;
+    await updateDoc(doc(db, 'requests', editingRequestId), editedRequest);
+    setEditingRequestId(null);
+    fetchRequests(currentUser.uid);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingRequestId(null);
+  };
+
+  const handleAddRequest = async () => {
+    if (!newRequest.bloodType || !newRequest.units) {
+      alert('Please fill in blood type and units.');
       return;
     }
-
-    try {
-      await addDoc(collection(db, 'requests'), {
-        ...newRequest,
-        hospitalId: currentUser.uid,
-        createdAt: new Date(),
-      });
-      alert('Request created!');
-      setNewRequest({
-        bloodType: '',
-        units: '',
-        urgency: 'Normal',
-        hospitalName: '',
-        status: 'Pending',
-      });
-    } catch (error) {
-      console.error('Error creating request:', error);
-      alert('Failed to create request.');
-    }
+    await addDoc(collection(db, 'requests'), {
+      ...newRequest,
+      units: parseInt(newRequest.units),
+      hospitalId: currentUser.uid,
+      hospitalName: hospitalName,
+      location: hospitalLocation,
+      status: 'Pending',
+      createdAt: serverTimestamp(),
+    });
+    setNewRequest({ bloodType: '', units: '', urgency: 'Normal' });
+    fetchRequests(currentUser.uid);
   };
 
-  // Mark request as fulfilled
-  const markFulfilled = async (requestId) => {
-    try {
-      const requestRef = doc(db, 'requests', requestId);
-      await updateDoc(requestRef, { status: 'Fulfilled' });
-    } catch (error) {
-      console.error('Error updating request:', error);
-      alert('Failed to update request status.');
-    }
+  const filteredRequests = requests.filter(req => {
+    return (
+      (!filters.urgency || req.urgency === filters.urgency) &&
+      (!filters.status || req.status === filters.status)
+    );
+  });
+
+  const summary = {
+    total: requests.length,
+    pending: requests.filter(r => r.status === 'Pending').length,
+    fulfilled: requests.filter(r => r.status === 'Fulfilled').length,
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3>🏥 Hospital Dashboard</h3>
-        <button onClick={handleLogout}>Logout</button>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-red-600">🏥 Hospital Dashboard</h2>
+          <div className="space-x-4">
+            <span className="text-gray-700 font-medium">Welcome, {hospitalName}</span>
+            <button onClick={() => navigate('/admin')} className="text-blue-600 hover:underline">Admin</button>
+            <button onClick={() => signOut(auth).then(() => navigate('/'))} className="text-red-600 hover:underline">Logout</button>
+          </div>
+        </div>
+
+        <div className="mb-6 p-4 bg-white rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">📊 Summary</h3>
+          <p>Total Requests: {summary.total}</p>
+          <p>Pending: {summary.pending}</p>
+          <p>Fulfilled: {summary.fulfilled}</p>
+        </div>
+
+        <div className="mb-6 p-4 bg-white rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">➕ New Blood Request</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label>Blood Type</label>
+              <select value={newRequest.bloodType} onChange={(e) => setNewRequest({ ...newRequest, bloodType: e.target.value })} className="w-full p-2 border rounded">
+                <option value="">Select</option>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bt => (
+                  <option key={bt} value={bt}>{bt}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label>Units</label>
+              <input type="number" value={newRequest.units} onChange={(e) => setNewRequest({ ...newRequest, units: e.target.value })} className="w-full p-2 border rounded" />
+            </div>
+            <div>
+              <label>Urgency</label>
+              <select value={newRequest.urgency} onChange={(e) => setNewRequest({ ...newRequest, urgency: e.target.value })} className="w-full p-2 border rounded">
+                <option value="Normal">Normal</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label>Location</label>
+              <input value={hospitalLocation} readOnly className="w-full p-2 border rounded" />
+            </div>
+          </div>
+          <button onClick={handleAddRequest} className="mt-4 bg-red-600 text-white px-4 py-2 rounded">Add Request</button>
+        </div>
+
+        <div className="mb-6 p-4 bg-white rounded shadow">
+          <h3 className="text-lg font-semibold mb-2">🔍 Filter Requests</h3>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div>
+              <label>Urgency</label>
+              <select value={filters.urgency} onChange={(e) => setFilters({ ...filters, urgency: e.target.value })} className="w-full p-2 border rounded">
+                <option value="">All</option>
+                <option value="Normal">Normal</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label>Status</label>
+              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full p-2 border rounded">
+                <option value="">All</option>
+                <option value="Pending">Pending</option>
+                <option value="Fulfilled">Fulfilled</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <CSVLink data={requests} filename={`requests_${Date.now()}.csv`} className="bg-green-600 text-white px-4 py-2 rounded">📤 Export Requests to CSV</CSVLink>
+        </div>
+
+        <div className="space-y-6">
+          {filteredRequests.length === 0 ? (
+            <p>No requests found.</p>
+          ) : (
+            filteredRequests.map((req) => (
+              <div key={req.id} className="p-4 bg-white rounded shadow">
+                {editingRequestId === req.id ? (
+                  <div className="space-y-2">
+                    <input value={editedRequest.bloodType} onChange={(e) => setEditedRequest({ ...editedRequest, bloodType: e.target.value })} className="w-full p-2 border rounded" />
+                    <input type="number" value={editedRequest.units} onChange={(e) => setEditedRequest({ ...editedRequest, units: parseInt(e.target.value) })} className="w-full p-2 border rounded" />
+                    <select value={editedRequest.urgency} onChange={(e) => setEditedRequest({ ...editedRequest, urgency: e.target.value })} className="w-full p-2 border rounded">
+                      <option value="Normal">Normal</option>
+                      <option value="Urgent">Urgent</option>
+                    </select>
+                    <input value={editedRequest.location} onChange={(e) => setEditedRequest({ ...editedRequest, location: e.target.value })} className="w-full p-2 border rounded" />
+                    <div className="flex gap-2">
+                      <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-1 rounded">Save</button>
+                      <button onClick={handleCancelEdit} className="bg-gray-400 text-white px-4 py-1 rounded">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p><strong>Blood Type:</strong> {req.bloodType}</p>
+                    <p><strong>Units:</strong> {req.units}</p>
+                    <p><strong>Urgency:</strong> {req.urgency}</p>
+                    <p><strong>Status:</strong> {req.status}</p>
+                    {req.location && <a href={req.location} target="_blank" className="text-blue-600 hover:underline">📍 View Location</a>}
+                    <div className="mt-2 flex gap-2">
+                      <button onClick={() => handleEdit(req)} className="bg-yellow-500 text-white px-4 py-1 rounded">Edit</button>
+                      <button onClick={() => handleDelete(req.id)} className="bg-red-500 text-white px-4 py-1 rounded">Delete</button>
+                    </div>
+                    {req.donors?.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold">🧍 Donors Available:</h4>
+                        <ul className="list-disc list-inside">
+                          {req.donors.map((donor, index) => (
+                            <li key={index}>{donor.phone || 'Anonymous'} - Availability: {donor.availability || 'Not specified'}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
-
-      <h4>Create New Blood Request</h4>
-      <form onSubmit={handleCreateRequest}>
-        <div style={{ marginBottom: '1em' }}>
-          <label>Blood Type:</label><br />
-          <select
-            value={newRequest.bloodType}
-            onChange={(e) => setNewRequest({ ...newRequest, bloodType: e.target.value })}
-            required
-          >
-            <option value="">Select Blood Type</option>
-            <option value="A+">A+</option>
-            <option value="A-">A-</option>
-            <option value="B+">B+</option>
-            <option value="B-">B-</option>
-            <option value="AB+">AB+</option>
-            <option value="AB-">AB-</option>
-            <option value="O+">O+</option>
-            <option value="O-">O-</option>
-          </select>
-        </div>
-
-        <div style={{ marginBottom: '1em' }}>
-          <label>Units Needed:</label><br />
-          <input
-            type="number"
-            value={newRequest.units}
-            onChange={(e) => setNewRequest({ ...newRequest, units: e.target.value })}
-            required
-          />
-        </div>
-
-        <div style={{ marginBottom: '1em' }}>
-          <label>Hospital Name:</label><br />
-          <input
-            type="text"
-            value={newRequest.hospitalName}
-            onChange={(e) => setNewRequest({ ...newRequest, hospitalName: e.target.value })}
-            required
-          />
-        </div>
-
-        <div style={{ marginBottom: '1em' }}>
-          <label>Urgency:</label><br />
-          <select
-            value={newRequest.urgency}
-            onChange={(e) => setNewRequest({ ...newRequest, urgency: e.target.value })}
-          >
-            <option value="Normal">Normal</option>
-            <option value="Urgent">Urgent</option>
-          </select>
-        </div>
-
-        <button type="submit">Create Request</button>
-      </form>
-
-      <h4>Your Blood Requests</h4>
-      {loading ? (
-        <p>Loading requests...</p>
-      ) : requests.length === 0 ? (
-        <p>No blood requests created yet.</p>
-      ) : (
-        <ul>
-          {requests.map((req) => (
-            <li key={req.id} style={{ marginBottom: '1em' }}>
-              <strong>Blood Type:</strong> {req.bloodType}<br />
-              <strong>Units Needed:</strong> {req.units}<br />
-              <strong>Status:</strong> {req.status}<br />
-              <strong>Urgency:</strong> {req.urgency}<br />
-              <button onClick={() => markFulfilled(req.id)}>Mark Fulfilled</button>
-              <DonorResponses requestId={req.id} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-// Component to show donor responses for a request
-function DonorResponses({ requestId }) {
-  const [responses, setResponses] = useState([]);
-
-  useEffect(() => {
-    const fetchResponses = async () => {
-      const responsesRef = collection(db, 'requests', requestId, 'responses');
-      const snapshot = await getDocs(responsesRef);
-      setResponses(snapshot.docs.map(doc => doc.data()));
-    };
-    fetchResponses();
-  }, [requestId]);
-
-  if (responses.length === 0) return <p>No donor responses yet.</p>;
-
-  return (
-    <div>
-      <h5>Donor Responses:</h5>
-      <ul>
-        {responses.map((resp, idx) => (
-          <li key={idx}>
-            {resp.name} ({resp.contact}) - Offered at {resp.offeredAt?.toDate().toLocaleString() || 'Unknown'}
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

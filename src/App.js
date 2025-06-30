@@ -9,6 +9,8 @@ import Register from './components/Register';
 import ProtectedRoute from './components/ProtectedRoute';
 import DonorDashboard from './components/DonorDashboard';
 import HospitalDashboard from './components/HospitalDashboard';
+import Profile from './components/Profile'; 
+import AdminDashboard from './components/AdminDashboard';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -47,6 +49,7 @@ function App() {
         />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/admin" element={<AdminDashboard />} />
 
         <Route
           path="/dashboard"
@@ -55,6 +58,15 @@ function App() {
               {role === 'donor' && <DonorDashboard />}
               {role === 'hospital' && <HospitalDashboard />}
               {!role && <p>Role not found.</p>}
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <Profile /> {/* ✅ NEW */}
             </ProtectedRoute>
           }
         />
