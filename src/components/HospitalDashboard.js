@@ -17,6 +17,7 @@ import { CSVLink } from 'react-csv';
 
 function HospitalDashboard() {
   const [requests, setRequests] = useState([]);
+  const [responses, setResponses] = useState({});
   const [currentUser, setCurrentUser] = useState(null);
   const [hospitalName, setHospitalName] = useState('');
   const [hospitalLocation, setHospitalLocation] = useState('');
@@ -27,213 +28,246 @@ function HospitalDashboard() {
 
   const navigate = useNavigate();
 
+  // Load hospital info and requests on mount
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUser(user);
         const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', user.uid)));
         const userData = userDoc.docs[0]?.data();
-        setHospitalName(userData?.name || '');
+        setHospitalName(userData?.hospitalName || userData?.name || '');
         setHospitalLocation(userData?.location || '');
         fetchRequests(user.uid);
       } else {
         navigate('/');
       }
     });
-
     return () => unsubscribe();
   }, [navigate]);
 
+  // Fetch requests and donor responses
   const fetchRequests = async (uid) => {
-    const snapshot = await getDocs(query(collection(db, 'requests'), where('hospitalId', '==', uid)));
-    const list = await Promise.all(snapshot.docs.map(async docSnap => {
-      const data = docSnap.data();
-      const responsesSnapshot = await getDocs(collection(db, 'requests', docSnap.id, 'responses'));
-      const donors = responsesSnapshot.docs.map(r => r.data());
-      return { id: docSnap.id, ...data, donors };
-    }));
+    const reqSnap = await getDocs(query(collection(db, 'requests'), where('hospitalId', '==', uid)));
+    const list = reqSnap.docs.map(d => ({ id: d.id, ...d.data() }));
     setRequests(list);
+
+    const responseMap = {};
+    const donorIds = new Set();
+
+    for (const req of reqSnap.docs) {
+      const resSnap = await getDocs(collection(db, 'requests', req.id, 'responses'));
+      const arr = resSnap.docs.map(d => {
+        const data = d.data();
+        if (data.donorId) donorIds.add(data.donorId);
+        return { id: d.id, ...data };
+      });
+      responseMap[req.id] = arr;
+    }
+
+    const donorNameMap = {};
+    if (donorIds.size) {
+      const nameSnap = await getDocs(query(collection(db, 'users'), where('__name__', 'in', Array.from(donorIds))));
+      nameSnap.docs.forEach(d => donorNameMap[d.id] = d.data().name || 'Unnamed Donor');
+    }
+
+    for (let reqId in responseMap) {
+      responseMap[reqId] = responseMap[reqId].map(res => ({
+        ...res,
+        donorName: donorNameMap[res.donorId] || res.donorId
+      }));
+    }
+
+    setResponses(responseMap);
   };
 
-  const handleDelete = async (id) => {
-    const confirmDelete = window.confirm('Are you sure you want to delete this request?');
-    if (!confirmDelete) return;
+  // Handlers: Delete, Edit, Save, Mark Donated, Fulfilled
+  const handleDelete = async id => {
+    if (!window.confirm('Delete this request?')) return;
     await deleteDoc(doc(db, 'requests', id));
     fetchRequests(currentUser.uid);
   };
 
-  const handleEdit = (request) => {
-    setEditingRequestId(request.id);
-    setEditedRequest({ ...request });
-  };
+  const handleEdit = req => {
+  setEditingRequestId(req.id);
+  setEditedRequest({ ...req });
+};
 
-  const handleSave = async () => {
-    const confirmSave = window.confirm('Save changes to this request?');
-    if (!confirmSave) return;
-    await updateDoc(doc(db, 'requests', editingRequestId), editedRequest);
-    setEditingRequestId(null);
+const handleSave = async () => {
+  await updateDoc(doc(db, 'requests', editingRequestId), editedRequest);
+  setEditingRequestId(null);
+  fetchRequests(currentUser.uid);
+};
+
+
+  const handleMarkDonated = async (reqId, resId) => {
+    await updateDoc(doc(db, 'requests', reqId, 'responses', resId), { donated: true });
     fetchRequests(currentUser.uid);
   };
 
-  const handleCancelEdit = () => {
-    setEditingRequestId(null);
+  const handleMarkFulfilled = async reqId => {
+    await updateDoc(doc(db, 'requests', reqId), { status: 'Fulfilled' });
+    fetchRequests(currentUser.uid);
   };
 
   const handleAddRequest = async () => {
     if (!newRequest.bloodType || !newRequest.units) {
-      alert('Please fill in blood type and units.');
+      alert('Fill in all fields!');
       return;
     }
+
     await addDoc(collection(db, 'requests'), {
       ...newRequest,
       units: parseInt(newRequest.units),
       hospitalId: currentUser.uid,
-      hospitalName: hospitalName,
+      hospitalName,
       location: hospitalLocation,
       status: 'Pending',
       createdAt: serverTimestamp(),
     });
+
     setNewRequest({ bloodType: '', units: '', urgency: 'Normal' });
     fetchRequests(currentUser.uid);
   };
 
-  const filteredRequests = requests.filter(req => {
-    return (
-      (!filters.urgency || req.urgency === filters.urgency) &&
-      (!filters.status || req.status === filters.status)
-    );
-  });
-
-  const summary = {
-    total: requests.length,
-    pending: requests.filter(r => r.status === 'Pending').length,
-    fulfilled: requests.filter(r => r.status === 'Fulfilled').length,
-  };
+  // Filter and categorize
+  const filtered = requests.filter(r =>
+    (!filters.urgency || r.urgency === filters.urgency) &&
+    (!filters.status || r.status === filters.status)
+  );
+  const pendingReqs = filtered.filter(r => r.status !== 'Fulfilled');
+  const doneReqs = filtered.filter(r => r.status === 'Fulfilled');
+  const summary = { total: requests.length, pending: pendingReqs.length, fulfilled: doneReqs.length };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
+    <div className="min-h-screen bg-gray-100 p-6 text-gray-800">
+      <header className="flex justify-between items-center mb-6">
+        <div>
           <h2 className="text-2xl font-bold text-red-600">🏥 Hospital Dashboard</h2>
-          <div className="space-x-4">
-            <span className="text-gray-700 font-medium">Welcome, {hospitalName}</span>
-            <button onClick={() => navigate('/admin')} className="text-blue-600 hover:underline">Admin</button>
-            <button onClick={() => signOut(auth).then(() => navigate('/'))} className="text-red-600 hover:underline">Logout</button>
+          <p className="text-gray-600 text-sm">Hospital: {hospitalName}</p>
+        </div>
+        <div className="space-x-4">
+          <span>Welcome, {hospitalName}</span>
+          <button onClick={() => navigate('/admin')} className="text-blue-600 hover:underline">Admin</button>
+          <button onClick={() => signOut(auth).then(() => navigate('/'))} className="text-red-600 hover:underline">Logout</button>
+        </div>
+      </header>
+
+      <section className="mb-6">
+        <h3 className="font-semibold text-lg">📊 Summary</h3>
+        <p>Total requests: {summary.total} | Pending: {summary.pending} | Fulfilled: {summary.fulfilled}</p>
+      </section>
+
+      <section className="bg-white rounded shadow p-4 mb-6">
+        <h3 className="font-semibold mb-2">➕ New Blood Request</h3>
+        <div className="space-y-2">
+          <label>Blood Type:</label>
+          <select className="w-full border rounded p-2" value={newRequest.bloodType} onChange={e => setNewRequest({...newRequest, bloodType: e.target.value})}>
+            <option value="">Select</option>
+            {["A+","A-","B+","B-","AB+","AB-","O+","O-"].map(bt => <option key={bt} value={bt}>{bt}</option>)}
+          </select>
+          <label>Units:</label>
+          <input type="number" className="w-full border rounded p-2" value={newRequest.units} onChange={e => setNewRequest({...newRequest, units: e.target.value})} />
+          <label>Urgency:</label>
+          <select className="w-full border rounded p-2" value={newRequest.urgency} onChange={e => setNewRequest({...newRequest, urgency: e.target.value})}>
+            <option value="Normal">Normal</option>
+            <option value="Urgent">Urgent</option>
+          </select>
+         <label>Location (URL):</label>
+<input
+  type="text"
+  value={hospitalLocation}
+  onChange={(e) => setHospitalLocation(e.target.value)}
+  className="w-full border rounded p-2"
+/>
+          <button onClick={handleAddRequest} className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Add Request</button>
+        </div>
+      </section>
+
+      <section className="mb-6">
+        <h3 className="font-semibold">🔍 Filter</h3>
+        <div className="flex gap-4">
+          <div>
+            <label>Urgency:</label>
+            <select className="border rounded p-2" value={filters.urgency} onChange={e => setFilters({...filters, urgency: e.target.value})}>
+              <option value="">All</option><option value="Normal">Normal</option><option value="Urgent">Urgent</option>
+            </select>
+          </div>
+          <div>
+            <label>Status:</label>
+            <select className="border rounded p-2" value={filters.status} onChange={e => setFilters({...filters, status: e.target.value})}>
+              <option value="">All</option><option value="Pending">Pending</option><option value="Fulfilled">Fulfilled</option>
+            </select>
           </div>
         </div>
+      </section>
 
-        <div className="mb-6 p-4 bg-white rounded shadow">
-          <h3 className="text-lg font-semibold mb-2">📊 Summary</h3>
-          <p>Total Requests: {summary.total}</p>
-          <p>Pending: {summary.pending}</p>
-          <p>Fulfilled: {summary.fulfilled}</p>
-        </div>
+      <CSVLink data={requests} filename={`requests_${Date.now()}.csv`} className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 mb-4">
+        📤 Export to CSV
+      </CSVLink>
 
-        <div className="mb-6 p-4 bg-white rounded shadow">
-          <h3 className="text-lg font-semibold mb-2">➕ New Blood Request</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label>Blood Type</label>
-              <select value={newRequest.bloodType} onChange={(e) => setNewRequest({ ...newRequest, bloodType: e.target.value })} className="w-full p-2 border rounded">
-                <option value="">Select</option>
-                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bt => (
-                  <option key={bt} value={bt}>{bt}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label>Units</label>
-              <input type="number" value={newRequest.units} onChange={(e) => setNewRequest({ ...newRequest, units: e.target.value })} className="w-full p-2 border rounded" />
-            </div>
-            <div>
-              <label>Urgency</label>
-              <select value={newRequest.urgency} onChange={(e) => setNewRequest({ ...newRequest, urgency: e.target.value })} className="w-full p-2 border rounded">
-                <option value="Normal">Normal</option>
-                <option value="Urgent">Urgent</option>
-              </select>
-            </div>
-            <div>
-              <label>Location</label>
-              <input value={hospitalLocation} readOnly className="w-full p-2 border rounded" />
-            </div>
-          </div>
-          <button onClick={handleAddRequest} className="mt-4 bg-red-600 text-white px-4 py-2 rounded">Add Request</button>
-        </div>
-
-        <div className="mb-6 p-4 bg-white rounded shadow">
-          <h3 className="text-lg font-semibold mb-2">🔍 Filter Requests</h3>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label>Urgency</label>
-              <select value={filters.urgency} onChange={(e) => setFilters({ ...filters, urgency: e.target.value })} className="w-full p-2 border rounded">
-                <option value="">All</option>
-                <option value="Normal">Normal</option>
-                <option value="Urgent">Urgent</option>
-              </select>
-            </div>
-            <div>
-              <label>Status</label>
-              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="w-full p-2 border rounded">
-                <option value="">All</option>
-                <option value="Pending">Pending</option>
-                <option value="Fulfilled">Fulfilled</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-6">
-          <CSVLink data={requests} filename={`requests_${Date.now()}.csv`} className="bg-green-600 text-white px-4 py-2 rounded">📤 Export Requests to CSV</CSVLink>
-        </div>
-
-        <div className="space-y-6">
-          {filteredRequests.length === 0 ? (
-            <p>No requests found.</p>
-          ) : (
-            filteredRequests.map((req) => (
-              <div key={req.id} className="p-4 bg-white rounded shadow">
-                {editingRequestId === req.id ? (
-                  <div className="space-y-2">
-                    <input value={editedRequest.bloodType} onChange={(e) => setEditedRequest({ ...editedRequest, bloodType: e.target.value })} className="w-full p-2 border rounded" />
-                    <input type="number" value={editedRequest.units} onChange={(e) => setEditedRequest({ ...editedRequest, units: parseInt(e.target.value) })} className="w-full p-2 border rounded" />
-                    <select value={editedRequest.urgency} onChange={(e) => setEditedRequest({ ...editedRequest, urgency: e.target.value })} className="w-full p-2 border rounded">
-                      <option value="Normal">Normal</option>
-                      <option value="Urgent">Urgent</option>
-                    </select>
-                    <input value={editedRequest.location} onChange={(e) => setEditedRequest({ ...editedRequest, location: e.target.value })} className="w-full p-2 border rounded" />
-                    <div className="flex gap-2">
-                      <button onClick={handleSave} className="bg-blue-600 text-white px-4 py-1 rounded">Save</button>
-                      <button onClick={handleCancelEdit} className="bg-gray-400 text-white px-4 py-1 rounded">Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <p><strong>Blood Type:</strong> {req.bloodType}</p>
-                    <p><strong>Units:</strong> {req.units}</p>
-                    <p><strong>Urgency:</strong> {req.urgency}</p>
-                    <p><strong>Status:</strong> {req.status}</p>
-                    {req.location && <a href={req.location} target="_blank" className="text-blue-600 hover:underline">📍 View Location</a>}
-                    <div className="mt-2 flex gap-2">
-                      <button onClick={() => handleEdit(req)} className="bg-yellow-500 text-white px-4 py-1 rounded">Edit</button>
-                      <button onClick={() => handleDelete(req.id)} className="bg-red-500 text-white px-4 py-1 rounded">Delete</button>
-                    </div>
-                    {req.donors?.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="font-semibold">🧍 Donors Available:</h4>
-                        <ul className="list-disc list-inside">
-                          {req.donors.map((donor, index) => (
-                            <li key={index}>{donor.phone || 'Anonymous'} - Availability: {donor.availability || 'Not specified'}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                )}
+      <section>
+        <h3 className="text-xl font-semibold mb-2">📋 Pending Requests</h3>
+        {pendingReqs.length === 0 ? <p>No pending requests.</p> :
+          pendingReqs.map(req => (
+            <div key={req.id} className="bg-white p-4 rounded shadow mb-4">
+              <p><strong>Blood Type:</strong> {req.bloodType}</p>
+              <p><strong>Units:</strong> {req.units}</p>
+              <p><strong>Urgency:</strong> {req.urgency}</p>
+              {req.location && <a href={req.location} className="text-blue-600 hover:underline">📍 Location</a>}
+              <div className="mt-2 flex gap-2">
+                <button onClick={() => handleEdit(req)} className="bg-yellow-500 text-white px-2 py-1 rounded">Edit</button>
+                <button onClick={() => handleDelete(req.id)} className="bg-red-500 text-white px-2 py-1 rounded">Delete</button>
+                <button onClick={() => handleMarkFulfilled(req.id)} className="bg-green-600 text-white px-2 py-1 rounded">Mark Fulfilled</button>
               </div>
-            ))
-          )}
-        </div>
-      </div>
+
+              {responses[req.id]?.length > 0 && (
+                <div className="mt-4">
+                  <strong>🧑 Donors:</strong>
+                  <ul className="list-disc pl-5">
+                    {responses[req.id].map(res =>
+                      <li key={res.id} className="mt-2">
+                        <p>Donor: <code>{res.donorName}</code></p>
+                        <p>Units: {res.unitsDonated}</p>
+                        <p>Phone: {res.phone || 'N/A'}</p>
+                        <p>Availability: {res.availability || 'Not provided'}</p>
+                        <p>Status: {res.donated ? '✅ Donated' : '⏳ Pending'}</p>
+                        {!res.donated && (
+                          <button onClick={() => handleMarkDonated(req.id, res.id)} className="mt-1 px-2 py-1 text-white bg-green-500 rounded">Mark as Donated</button>
+                        )}
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </section>
+
+      <section className="mt-8">
+        <h3 className="text-xl font-semibold mb-2">✅ Fulfilled Requests</h3>
+        {doneReqs.length === 0 ? <p>No fulfilled requests yet.</p> :
+          doneReqs.map(req => (
+            <div key={req.id} className="bg-gray-50 p-4 rounded shadow mb-4 opacity-75">
+              <p><strong>Blood Type:</strong> {req.bloodType}</p>
+              <p><strong>Units:</strong> {req.units}</p>
+              <p><strong>Urgency:</strong> {req.urgency}</p>
+              {responses[req.id]?.length > 0 && (
+                <div className="mt-2">
+                  <strong>Donors who donated:</strong>
+                  <ul className="list-disc pl-5">
+                    {responses[req.id].filter(r => r.donated).map(res =>
+                      <li key={res.id}>
+                        <p>{res.donorName} – Units: {res.unitsDonated}, Status: ✅ Donated</p>
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ))
+        }
+      </section>
     </div>
   );
 }

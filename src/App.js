@@ -11,6 +11,7 @@ import DonorDashboard from './components/DonorDashboard';
 import HospitalDashboard from './components/HospitalDashboard';
 import Profile from './components/Profile'; 
 import AdminDashboard from './components/AdminDashboard';
+import LandingPage from './components/LandingPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -50,6 +51,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/landingpage" element={<LandingPage />} />
+
 
         <Route
           path="/dashboard"

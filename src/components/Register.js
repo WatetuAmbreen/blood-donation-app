@@ -11,6 +11,7 @@ export default function Register() {
   const [type, setType] = useState('donor');
   const [phone, setPhone] = useState('');
   const [bloodType, setBloodType] = useState('');
+  const [hospitalName, setHospitalName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
@@ -32,6 +33,10 @@ export default function Register() {
         userData.phone = phone;
         userData.bloodType = bloodType;
         userData.phoneVerified = false;
+      }
+
+      if (type === 'hospital') {
+        userData.hospitalName = hospitalName;
       }
 
       await setDoc(doc(db, 'users', uid), userData);
@@ -114,6 +119,17 @@ export default function Register() {
                 <option value="O-">O-</option>
               </select>
             </>
+          )}
+
+          {type === 'hospital' && (
+            <input
+              type="text"
+              placeholder="Hospital Name"
+              value={hospitalName}
+              onChange={(e) => setHospitalName(e.target.value)}
+              required
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-blue-400"
+            />
           )}
 
           <button
