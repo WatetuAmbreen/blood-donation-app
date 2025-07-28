@@ -5,11 +5,46 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="bg-white text-gray-800">
+    <div className="min-h-screen bg-white text-gray-800">
+      {/* Navigation Bar */}
+      <nav className="flex justify-between items-center px-6 py-4 shadow-sm border-b bg-white">
+        {/* Left side: Logo */}
+        <div
+          className="text-2xl font-bold text-red-600 cursor-pointer"
+          onClick={() => navigate('/')}
+        >
+          BloodDonate
+        </div>
+
+        {/* Right side: Navigation buttons */}
+        <div className="space-x-4 text-sm font-medium">
+          <button
+            onClick={() => navigate('/login')}
+            className="text-gray-700 hover:text-red-600 transition"
+          >
+            Login
+          </button>
+          <button
+            onClick={() => navigate('/register')}
+            className="text-gray-700 hover:text-red-600 transition"
+          >
+            Sign Up
+          </button>
+          <button
+            onClick={() => alert('Contact us at: ambreenwatetu1@gmail.com')}
+            className="text-gray-700 hover:text-red-600 transition"
+          >
+            Contact Us
+          </button>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="bg-red-600 text-white py-20 px-6 text-center">
-        <h1 className="text-4xl md:text-6xl font-bold mb-4">Save Lives with One Click</h1>
-        <p className="text-lg md:text-xl mb-6">Join our blood donation network and make a life-saving impact today.</p>
+        <h1 className="text-4xl md:text-6xl font-bold mb-4">Help Save Lives</h1>
+        <p className="text-lg md:text-xl mb-6">
+          Join our blood donation network and make a life-saving impact today.
+        </p>
         <button
           onClick={() => navigate('/register')}
           className="bg-white text-red-600 font-semibold px-6 py-3 rounded-lg hover:bg-gray-100 transition"

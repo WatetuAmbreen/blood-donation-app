@@ -4,6 +4,7 @@ import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
+import LandingPage from './components/LandingPage';
 import Login from './components/Login';
 import Register from './components/Register';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -11,7 +12,6 @@ import DonorDashboard from './components/DonorDashboard';
 import HospitalDashboard from './components/HospitalDashboard';
 import Profile from './components/Profile'; 
 import AdminDashboard from './components/AdminDashboard';
-import LandingPage from './components/LandingPage';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -46,22 +46,24 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />}
+          element={user ? <Navigate to="/landingpage" /> : <Navigate to="/login" />}
         />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/landingpage" element={<LandingPage />} />
-
-
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              {role === 'donor' && <DonorDashboard />}
-              {role === 'hospital' && <HospitalDashboard />}
-              {!role && <p>Role not found.</p>}
-            </ProtectedRoute>
+   <Route path="/landingpage" element={<LandingPage />} />
+    <Route path="/login" element={<Login />} />
+    <Route path="/register" element={<Register />} />
+    
+    {/* Admin Dashboard (Hospital) */}
+    <Route path="/admin" element={<AdminDashboard />} />
+    
+    {/* Protected Dashboard Route */}
+    <Route
+      path="/dashboard"
+      element={
+        <ProtectedRoute>
+          {role === 'donor' && <DonorDashboard />}
+          {role === 'hospital' && <HospitalDashboard />}
+          {!role && <p>Role not found.</p>}
+        </ProtectedRoute>
           }
         />
 

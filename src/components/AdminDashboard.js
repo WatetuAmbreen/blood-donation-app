@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 
 export default function AdminDashboard() {
   const [totalDonors, setTotalDonors] = useState(0);
@@ -42,27 +42,35 @@ export default function AdminDashboard() {
   }, []);
 
   return (
-    <div style={{ padding: '1em' }}>
-      <h2>📊 Admin Dashboard</h2>
+    <div className="min-h-screen bg-gray-100 p-6 text-gray-800">
+      <div className="max-w-3xl mx-auto bg-white shadow rounded-lg p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-red-600">📊 Admin Dashboard</h2>
+          <button
+            onClick={() => navigate(-1)}
+            className="text-sm bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          >
+            ← Back
+          </button>
+        </div>
 
-      <button onClick={() => navigate(-1)} style={{ marginBottom: '1em' }}>
-        ← Back
-      </button>
+        <div className="mb-6 space-y-2 text-base">
+          <p><strong>Total Donors:</strong> {totalDonors}</p>
+          <p><strong>Total Hospitals:</strong> {totalHospitals}</p>
+          <p><strong>Fulfillment Rate:</strong> {fulfilledRate}%</p>
+        </div>
 
-      <div style={{ marginBottom: '1em' }}>
-        <strong>Total Donors:</strong> {totalDonors}<br />
-        <strong>Total Hospitals:</strong> {totalHospitals}<br />
-        <strong>Fulfillment Rate:</strong> {fulfilledRate}%
+        <div>
+          <h4 className="text-lg font-semibold mb-2">Units Donated by Blood Type</h4>
+          <ul className="list-disc pl-5 space-y-1">
+            {Object.entries(donationsByType).map(([type, count]) => (
+              <li key={type}>
+                <strong>{type}:</strong> {count} units
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
-
-      <h4>Units Donated by Blood Type</h4>
-      <ul>
-        {Object.entries(donationsByType).map(([type, count]) => (
-          <li key={type}>
-            <strong>{type}:</strong> {count} units
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

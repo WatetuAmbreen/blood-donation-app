@@ -32,10 +32,14 @@ export default function Profile() {
 
   const setupRecaptcha = () => {
     if (!window.recaptchaVerifier) {
-      window.recaptchaVerifier = new RecaptchaVerifier('recaptcha-container', {
-        size: 'invisible',
-        callback: () => handlePhoneVerification(),
-      }, auth);
+      window.recaptchaVerifier = new RecaptchaVerifier(
+        'recaptcha-container',
+        {
+          size: 'invisible',
+          callback: () => handlePhoneVerification(),
+        },
+        auth
+      );
     }
   };
 
@@ -77,55 +81,91 @@ export default function Profile() {
   };
 
   return (
-    <div>
-      <h2>Edit Profile</h2>
-      {userData ? (
-        <>
-          <p><strong>Name:</strong> {userData.name}</p>
-          <p><strong>Email:</strong> {userData.email}</p>
+    <div className="min-h-screen bg-gray-100 p-6 flex justify-center items-start">
+      <div className="bg-white shadow-md rounded-lg p-6 w-full max-w-xl">
+        <h2 className="text-2xl font-bold mb-4 text-red-600">Edit Profile</h2>
+        {userData ? (
+          <>
+            <p className="mb-2"><strong>Name:</strong> {userData.name}</p>
+            <p className="mb-4"><strong>Email:</strong> {userData.email}</p>
 
-          <div>
-            <label>Phone Number:</label><br />
-            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            <button onClick={handlePhoneVerification}>Verify Phone</button>
-            {confirmationResult && (
-              <>
+            <div className="mb-6">
+              <label className="block text-gray-700 font-medium mb-1">Phone Number:</label>
+              <div className="flex gap-2">
                 <input
-                  type="text"
-                  placeholder="Enter verification code"
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded"
                 />
-                <button onClick={confirmCode}>Confirm Code</button>
-              </>
-            )}
-            <p>Phone Verified: {isVerified ? '✅ Yes' : '❌ No'}</p>
-          </div>
+                <button
+                  onClick={handlePhoneVerification}
+                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+                >
+                  Verify Phone
+                </button>
+              </div>
+              {confirmationResult && (
+                <div className="mt-2 space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Enter verification code"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value)}
+                    className="w-full p-2 border border-gray-300 rounded"
+                  />
+                  <button
+                    onClick={confirmCode}
+                    className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                  >
+                    Confirm Code
+                  </button>
+                </div>
+              )}
+              <p className="mt-2">Phone Verified: {isVerified ? '✅ Yes' : '❌ No'}</p>
+            </div>
 
-          <div>
-            <label>Blood Type:</label><br />
-            <select value={bloodType} onChange={(e) => setBloodType(e.target.value)}>
-              <option value="">Select Blood Type</option>
-              <option value="A+">A+</option>
-              <option value="A-">A-</option>
-              <option value="B+">B+</option>
-              <option value="B-">B-</option>
-              <option value="AB+">AB+</option>
-              <option value="AB-">AB-</option>
-              <option value="O+">O+</option>
-              <option value="O-">O-</option>
-            </select>
-          </div>
+            <div className="mb-6">
+              <label className="block text-gray-700 font-medium mb-1">Blood Type:</label>
+              <select
+                value={bloodType}
+                onChange={(e) => setBloodType(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded"
+              >
+                <option value="">Select Blood Type</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
+            </div>
 
-          <button onClick={handleSave}>Save Changes</button>
-          <br /><br />
-          <button onClick={() => navigate('/dashboard')}>⬅ Back to Dashboard</button>
+            <button
+              onClick={handleSave}
+              className="w-full bg-red-600 text-white py-2 rounded hover:bg-red-700"
+            >
+              Save Changes
+            </button>
 
-          <div id="recaptcha-container"></div>
-        </>
-      ) : (
-        <p>Loading profile...</p>
-      )}
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="text-blue-600 hover:underline"
+              >
+                ⬅ Back to Dashboard
+              </button>
+            </div>
+
+            <div id="recaptcha-container"></div>
+          </>
+        ) : (
+          <p>Loading profile...</p>
+        )}
+      </div>
     </div>
   );
 }

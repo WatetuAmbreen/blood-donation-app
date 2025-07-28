@@ -22,8 +22,18 @@ export default function Login() {
       const userDoc = await getDoc(userDocRef);
 
       if (userDoc.exists()) {
+        const userData = userDoc.data();
         alert('Login successful!');
-        navigate('/dashboard');
+
+        // Redirect based on role
+        if (userData.role === 'donor') {
+          navigate('/dashboard');
+        } else if (userData.role === 'hospital') {
+          navigate('/dashboard');
+        } else {
+          // default fallback
+          navigate('/');
+        }
       } else {
         alert('User record not found in Firestore.');
       }
