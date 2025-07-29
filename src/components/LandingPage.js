@@ -1,56 +1,47 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { db } from '../firebase'; // adjust if path differs
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const [comments, setComments] = useState([]);
+
+  useEffect(() => {
+    // Fetch donor comments from Firestore
+    const fetchComments = async () => {
+      try {
+        const q = query(collection(db, 'donorComments'), orderBy('createdAt', 'desc'));
+        const snapshot = await getDocs(q);
+        const fetched = snapshot.docs.map(doc => doc.data());
+        setComments(fetched);
+      } catch (error) {
+        console.error('Error fetching comments:', error);
+      }
+    };
+
+    fetchComments();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white text-gray-800">
       {/* Navigation Bar */}
       <nav className="flex justify-between items-center px-6 py-4 shadow-sm border-b bg-white">
-        {/* Left side: Logo */}
-        <div
-          className="text-2xl font-bold text-red-600 cursor-pointer"
-          onClick={() => navigate('/')}
-        >
+        <div className="text-2xl font-bold text-red-600 cursor-pointer" onClick={() => navigate('/')}>
           BloodDonate
         </div>
-
-        {/* Right side: Navigation buttons */}
         <div className="space-x-4 text-sm font-medium">
-          <button
-            onClick={() => navigate('/login')}
-            className="text-gray-700 hover:text-red-600 transition"
-          >
-            Login
-          </button>
-          <button
-            onClick={() => navigate('/register')}
-            className="text-gray-700 hover:text-red-600 transition"
-          >
-            Sign Up
-          </button>
-          <button
-            onClick={() => alert('Contact us at: ambreenwatetu1@gmail.com')}
-            className="text-gray-700 hover:text-red-600 transition"
-          >
-            Contact Us
-          </button>
+          <button onClick={() => navigate('/login')} className="text-gray-700 hover:text-red-600 transition">Login</button>
+          <button onClick={() => navigate('/register')} className="text-gray-700 hover:text-red-600 transition">Sign Up</button>
+          <button onClick={() => alert('Contact us at: ambreenwatetu1@gmail.com')} className="text-gray-700 hover:text-red-600 transition">Contact Us</button>
         </div>
       </nav>
 
       {/* Hero Section */}
       <section className="bg-red-600 text-white py-20 px-6 text-center">
         <h1 className="text-4xl md:text-6xl font-bold mb-4">Help Save Lives</h1>
-        <p className="text-lg md:text-xl mb-6">
-          Join our blood donation network and make a life-saving impact today.
-        </p>
-        <button
-          onClick={() => navigate('/register')}
-          className="bg-white text-red-600 font-semibold px-6 py-3 rounded-lg hover:bg-gray-100 transition"
-        >
-          Get Started
-        </button>
+        <p className="text-lg md:text-xl mb-6">Join our blood donation network and make a life-saving impact today.</p>
+        <button onClick={() => navigate('/register')} className="bg-white text-red-600 font-semibold px-6 py-3 rounded-lg hover:bg-gray-100 transition">Get Started</button>
       </section>
 
       {/* How It Works */}
@@ -102,6 +93,23 @@ export default function LandingPage() {
             <p className="text-gray-700 text-base font-medium">Donors Registered</p>
           </div>
         </div>
+      </section>
+
+      {/* New: Donor Comments Section */}
+      <section className="py-16 px-6 text-center bg-white">
+        <h2 className="text-3xl font-bold mb-10">💬 Donor Voices</h2>
+        {comments.length === 0 ? (
+          <p className="text-gray-500">No comments yet. Be the first to inspire others!</p>
+        ) : (
+          <div className="max-w-4xl mx-auto space-y-6">
+            {comments.map((c, index) => (
+              <div key={index} className="border border-gray-200 rounded p-4 shadow-sm bg-gray-50">
+                <p className="text-lg italic text-gray-700">“{c.comment}”</p>
+                <p className="mt-2 text-sm font-medium text-red-600">— {c.donorName}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Final Call to Action */}

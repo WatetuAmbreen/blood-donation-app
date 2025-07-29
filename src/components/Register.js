@@ -12,6 +12,7 @@ export default function Register() {
   const [phone, setPhone] = useState('');
   const [bloodType, setBloodType] = useState('');
   const [hospitalName, setHospitalName] = useState('');
+  const [hospitalLocation, setHospitalLocation] = useState(''); // New state for hospital location
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
@@ -130,6 +131,16 @@ export default function Register() {
               required
               className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-blue-400"
             />
+          )}
+          {type === 'hospital' && (
+              <input
+               type="text"
+               placeholder="Hospital Location URL"
+               value={hospitalLocation}
+               onChange={(e) => setHospitalLocation(e.target.value)}
+               required
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring focus:border-blue-400"
+             />
           )}
 
           <button

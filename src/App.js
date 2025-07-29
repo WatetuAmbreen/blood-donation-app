@@ -46,7 +46,7 @@ function App() {
       <Routes>
         <Route
           path="/"
-          element={user ? <Navigate to="/landingpage" /> : <Navigate to="/login" />}
+          element={user ? <Navigate to="/landingpage" /> : <Navigate to="/landingpage" />}
         />
    <Route path="/landingpage" element={<LandingPage />} />
     <Route path="/login" element={<Login />} />

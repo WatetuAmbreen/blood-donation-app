@@ -1,4 +1,4 @@
-// DonorDashboard.js with enhanced donation controls
+// DonorDashboard.js with donor comment feature and donation rules reminder
 import React, { useEffect, useState } from 'react';
 import { db, auth } from '../firebase';
 import {
@@ -31,9 +31,12 @@ function DonorDashboard() {
   const [editedAvailability, setEditedAvailability] = useState('');
   const [fulfilledRequests, setFulfilledRequests] = useState(new Set());
   const [availabilityInputs, setAvailabilityInputs] = useState({});
+  const [comment, setComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
 
   const navigate = useNavigate();
 
+  // Fetch current user and their info
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -50,6 +53,7 @@ function DonorDashboard() {
     return () => unsubscribe();
   }, [navigate]);
 
+  // Fetch all requests and donation history
   useEffect(() => {
     const fetchRequests = async () => {
       try {
@@ -119,6 +123,7 @@ function DonorDashboard() {
     }
   }, [currentUser]);
 
+  // Submit a donation offer
   const handleDonate = async (req) => {
     try {
       const responsesRef = collection(db, 'requests', req.id, 'responses');
@@ -143,6 +148,7 @@ function DonorDashboard() {
     }
   };
 
+  // Edit an existing donation
   const handleEditDonation = (donation) => {
     setEditingDonationId(donation.responseDocId);
     setEditedUnits(donation.unitsDonated);
@@ -187,6 +193,27 @@ function DonorDashboard() {
     }
   };
 
+  // Submit encouraging comment
+  const handleSubmitComment = async () => {
+    if (!comment.trim()) return alert('Please write a comment before submitting.');
+    setSubmittingComment(true);
+    try {
+      await addDoc(collection(db, 'donorComments'), {
+        donorId: currentUser.uid,
+        donorName,
+        comment,
+        createdAt: serverTimestamp()
+      });
+      alert('Thank you for sharing your encouragement!');
+      setComment('');
+    } catch (error) {
+      alert('Failed to submit comment: ' + error.message);
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  // Filter logic
   const filteredRequests = requests.filter(req => (
     (!filters.urgency || req.urgency === filters.urgency) &&
     (!filters.status || req.status === filters.status) &&
@@ -196,6 +223,7 @@ function DonorDashboard() {
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-6">
       <div className="max-w-6xl mx-auto">
+        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-red-600">🩸 Donor Dashboard</h2>
           <div className="space-x-4">
@@ -205,13 +233,38 @@ function DonorDashboard() {
           </div>
         </div>
 
+          {/* Eligibility Rules Section */}
+           <div className="mb-10 bg-white p-6 rounded shadow border border-red-200">
+          <h3 className="text-xl font-bold text-red-600 mb-4">🩺 Blood Donation Eligibility</h3>
+          <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
+            <li>You must be at least <strong>16 to 65 years old</strong> (with parental consent if under 18).</li>
+            <li>You must weigh at least <strong>50 kg (110 lbs)</strong> and maximum of <strong> 120kg</strong>.</li>
+            <li>You should be in good general health and feel well on the day of donation.</li>
+            <li>Wait at least <strong>90 days</strong> between whole blood donations.</li>
+            <li>No recent infections, major surgeries, or vaccinations in the past few weeks.</li>
+            <li>No tattoos or piercings done in the last <strong>6 months</strong>.</li>
+            <li>Not currently taking antibiotics or certain medications like <strong> diabetes, epilepsy, or hypertension</strong> (check with hospital staff).</li>
+            <li>Have a valid form of ID and be hydrated before donation.</li>
+          </ul>
+         <div className="mt-6"></div> {/* Line break added here */}
+          <h3 className="text-xl font-bold text-red-600 mb-4">🩺 Before You Donate</h3>
+          <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
+            <li>Eat a healthy meal at least 6 hours prior.</li>
+            <li>Drink at least half a litre of water.</li>
+            <li>Avoid alcohol for 24 hours before donation.</li>
+                  </ul>
+        </div>
+
+        {/* Eligibility reminder */}
         {eligibleReminder && (
           <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
             🎉 You are now eligible to donate blood again!
           </div>
         )}
 
+        {/* Filters + Requests */}
         <div className="grid md:grid-cols-2 gap-6">
+          {/* Filters */}
           <div>
             <h3 className="text-lg font-semibold mb-2">🔍 Filter Requests</h3>
             <div className="space-y-3">
@@ -232,6 +285,7 @@ function DonorDashboard() {
             </div>
           </div>
 
+          {/* Donation Requests */}
           <div>
             <h3 className="text-lg font-semibold mb-2">📋 Available Requests</h3>
             {loadingRequests ? <p>Loading...</p> : (
@@ -263,6 +317,27 @@ function DonorDashboard() {
           </div>
         </div>
 
+        {/* Donor encouragement comment */}
+        <div className="mt-12">
+          <h3 className="text-lg font-semibold mb-2">💬 Encourage Others</h3>
+          <p className="mb-2 text-sm text-gray-600">Share a short message to inspire others to donate blood.</p>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            rows="3"
+            className="w-full p-2 border rounded resize-none"
+            placeholder="E.g., 'Donating blood is the easiest way to save lives. Do it!'"
+          ></textarea>
+          <button
+            onClick={handleSubmitComment}
+            disabled={submittingComment}
+            className={`mt-2 px-4 py-2 rounded text-white ${submittingComment ? 'bg-gray-400' : 'bg-red-600 hover:bg-red-700'}`}
+          >
+            {submittingComment ? 'Submitting...' : 'Submit Comment'}
+          </button>
+        </div>
+
+        {/* Donation History */}
         <div className="mt-10">
           <h3 className="text-lg font-semibold mb-2">🕘 Donation History</h3>
           {loadingHistory ? <p>Loading history...</p> : (
