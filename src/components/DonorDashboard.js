@@ -14,6 +14,8 @@ import {
 } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
+import Lottie from 'lottie-react';
+import bloodAnimation from '../assets/animations/blood.json';
 
 function DonorDashboard() {
   const [requests, setRequests] = useState([]);
@@ -233,27 +235,39 @@ function DonorDashboard() {
           </div>
         </div>
 
-          {/* Eligibility Rules Section */}
-           <div className="mb-10 bg-white p-6 rounded shadow border border-red-200">
-          <h3 className="text-xl font-bold text-red-600 mb-4">🩺 Blood Donation Eligibility</h3>
-          <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
-            <li>You must be at least <strong>16 to 65 years old</strong> (with parental consent if under 18).</li>
-            <li>You must weigh at least <strong>50 kg (110 lbs)</strong> and maximum of <strong> 120kg</strong>.</li>
-            <li>You should be in good general health and feel well on the day of donation.</li>
-            <li>Wait at least <strong>90 days</strong> between whole blood donations.</li>
-            <li>No recent infections, major surgeries, or vaccinations in the past few weeks.</li>
-            <li>No tattoos or piercings done in the last <strong>6 months</strong>.</li>
-            <li>Not currently taking antibiotics or certain medications like <strong> diabetes, epilepsy, or hypertension</strong> (check with hospital staff).</li>
-            <li>Have a valid form of ID and be hydrated before donation.</li>
-          </ul>
-         <div className="mt-6"></div> {/* Line break added here */}
-          <h3 className="text-xl font-bold text-red-600 mb-4">🩺 Before You Donate</h3>
-          <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
-            <li>Eat a healthy meal at least 6 hours prior.</li>
-            <li>Drink at least half a litre of water.</li>
-            <li>Avoid alcohol for 24 hours before donation.</li>
-                  </ul>
-        </div>
+  {/* Eligibility Rules Section */}
+    <div className="mb-10 bg-white p-6 rounded shadow border border-red-200 flex flex-col md:flex-row items-start justify-between gap-6">
+  
+   {/* Left Side: Text Rules */}
+     <div className="md:w-2/3">
+    <h3 className="text-xl font-bold text-red-600 mb-4">🩺 Blood Donation Eligibility</h3>
+    <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
+      <li>You must be at least <strong>16 to 65 years old</strong> (with parental consent if under 18).</li>
+      <li>You must weigh at least <strong>50 kg (110 lbs)</strong> and maximum of <strong> 120kg</strong>.</li>
+      <li>You should be in good general health and feel well on the day of donation.</li>
+      <li>Wait at least <strong>90 days</strong> between whole blood donations.</li>
+      <li>No recent infections, major surgeries, or vaccinations in the past few weeks.</li>
+      <li>No tattoos or piercings done in the last <strong>6 months</strong>.</li>
+      <li>Not currently taking antibiotics or certain medications like <strong>diabetes, epilepsy, or hypertension</strong> (check with hospital staff).</li>
+      <li>Have a valid form of ID and be hydrated before donation.</li>
+    </ul>
+
+    <div className="mt-6"></div> {/* Line break */}
+
+    <h3 className="text-xl font-bold text-red-600 mb-4">🩺 Before You Donate</h3>
+    <ul className="list-disc list-inside space-y-2 text-gray-700 text-sm">
+      <li>Eat a healthy meal at least 6 hours prior.</li>
+      <li>Drink at least half a litre of water.</li>
+      <li>Avoid alcohol for 24 hours before donation.</li>
+    </ul>
+  </div>
+
+  {/* Right Side: Animation */}
+  <div className="md:w-1/3 flex justify-center items-center">
+    <Lottie animationData={bloodAnimation} loop={true} className="w-48 h-48 md:w-64 md:h-64" />
+  </div>
+</div>
+
 
         {/* Eligibility reminder */}
         {eligibleReminder && (
